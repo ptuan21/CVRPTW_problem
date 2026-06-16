@@ -73,6 +73,7 @@ Hai tính năng quan trọng:
   nhất và tính lộ trình tối ưu.
 - **So sánh thuật toán**: chọn Hybrid ACO / OR-Tools / NN+2-opt để đối chiếu trực
   tiếp trên cùng bộ điểm.
+<img width="1692" height="858" alt="image" src="https://github.com/user-attachments/assets/62fcf93f-1b4c-41e9-89f7-951b85e94efc" />
 
 Điểm được lấy mặc định **ngẫu nhiên** từ các nút đường OSM (`graph_loader.sample_nodes`);
 ở chế độ tự chọn thì lấy từ vị trí người dùng nhấp (`graph_loader.nearest_node`).
