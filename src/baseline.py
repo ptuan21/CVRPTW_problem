@@ -50,13 +50,10 @@ def nearest_neighbor(pending: Sequence[int], vehicles: Sequence[VehicleState],
 
 
 def nearest_neighbor_2opt(pending, vehicles, solver: ACOSolver) -> Solution:
-    """NN rồi áp local search (2-opt/Or-opt/relocate) của solver."""
+    """NN rồi áp 2-opt/Or-opt TRONG TUYẾN (đúng nghĩa 'NN+2-opt' kinh điển).
+    Không dùng phép liên tuyến để baseline này phân biệt rõ với Hybrid ACO."""
     sol = nearest_neighbor(pending, vehicles, solver)
-    routes = [r[:] for r in sol.routes]
-    # Tận dụng đúng local search đã có để công bằng về thước đo.
-    refined = solver._local_search(
-        _eval_solution(solver, routes, vehicles, pending), vehicles, pending)
-    return refined
+    return solver._local_search(sol, vehicles, pending, level="intra")
 
 
 def or_tools_solve(pending, vehicles, solver: ACOSolver) -> Optional[Solution]:
@@ -92,6 +89,27 @@ def or_tools_solve(pending, vehicles, solver: ACOSolver) -> Optional[Solution]:
     didx = routing.RegisterUnaryTransitCallback(dcb)
     routing.AddDimensionWithVehicleCapacity(
         didx, 0, [int(v.capacity) for v in vehicles], True, "Cap")
+
+    # Ràng buộc CỬA SỔ THỜI GIAN: thời gian cộng dồn = di chuyển + phục vụ;
+    # cho phép xe chờ (slack) tới hết ca. Đây là phần làm OR-Tools thành baseline
+    # VRPTW đúng nghĩa (nếu thiếu, lời giải sẽ ngắn giả tạo do bỏ qua cửa sổ TG).
+    serv_int = solver._serv.astype(int)
+    horizon = int(solver._horizon)
+
+    def tcb(i, j):
+        fn = mgr.IndexToNode(i)
+        return int(t_int[fn][mgr.IndexToNode(j)] + serv_int[fn])
+
+    tidx = routing.RegisterTransitCallback(tcb)
+    routing.AddDimension(tidx, horizon, horizon, False, "Time")
+    time_dim = routing.GetDimensionOrDie("Time")
+    tw_s = solver._tw_s.astype(int)
+    tw_e = solver._tw_e.astype(int)
+    for node in range(n):
+        index = mgr.NodeToIndex(node)
+        time_dim.CumulVar(index).SetRange(int(tw_s[node]), int(tw_e[node]))
+    for k in range(len(vehicles)):
+        time_dim.CumulVar(routing.Start(k)).SetRange(0, horizon)
 
     # Chỉ buộc phục vụ các node trong `pending`; node khác cho phép bỏ.
     pend = set(pending)
