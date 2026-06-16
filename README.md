@@ -60,6 +60,8 @@ python -m experiments.run_emission   # tốc độ–phát thải + giờ cao đ
 ```bash
 python -m webapp.server              # rồi mở http://localhost:8000
 ```
+<img width="1692" height="893" alt="image" src="https://github.com/user-attachments/assets/47d2073c-b17a-422e-8536-e6c402d2f78a" />
+
 Bảng điều khiển cho phép đổi số đơn/xe/tải, loại nhiên liệu (E0/E5/E10), giờ khởi
 hành, bật/tắt tắc đường, và chế độ **tĩnh** (lộ trình tối ưu) hoặc **động** (đơn
 phát sinh + tái tối ưu). Lộ trình được vẽ **bám theo đường phố thật**; bảng chỉ số
