@@ -1,0 +1,307 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>Định tuyến động & gom hàng — Bản đồ thực</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<style>
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; font-family: -apple-system, "Segoe UI", Roboto, sans-serif; }
+  #app { display: flex; height: 100%; }
+  #panel { width: 320px; padding: 16px; overflow-y: auto; background: #f7f8fa;
+           border-right: 1px solid #e2e5ea; }
+  #map { flex: 1; }
+  h1 { font-size: 16px; margin: 0 0 4px; }
+  .sub { font-size: 12px; color: #6b7280; margin-bottom: 14px; }
+  label { display: block; font-size: 12px; color: #374151; margin: 10px 0 3px; font-weight: 600; }
+  input[type=number], select { width: 100%; padding: 6px 8px; border: 1px solid #cbd2dc;
+           border-radius: 6px; font-size: 13px; }
+  .row { display: flex; gap: 8px; }
+  .row > div { flex: 1; }
+  .range-val { font-weight: 700; color: #1d4ed8; }
+  input[type=range] { width: 100%; }
+  .check { display: flex; align-items: center; gap: 6px; margin-top: 10px; font-size: 13px; }
+  button { width: 100%; margin-top: 16px; padding: 10px; background: #1d4ed8; color: #fff;
+           border: 0; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer; }
+  button:disabled { background: #93a4d6; cursor: default; }
+  #metrics { margin-top: 16px; background: #fff; border: 1px solid #e2e5ea;
+             border-radius: 8px; padding: 12px; font-size: 13px; display: none; }
+  #metrics h2 { font-size: 13px; margin: 0 0 8px; color: #111827; }
+  .m { display: flex; justify-content: space-between; padding: 2px 0; }
+  .m span:last-child { font-weight: 700; }
+  .pill { display:inline-block; padding:1px 7px; border-radius:10px; font-size:11px;
+          background:#e0e7ff; color:#1d4ed8; }
+  #legend { margin-top: 12px; font-size: 12px; }
+  .leg { display: flex; align-items: center; gap: 6px; margin: 3px 0; }
+  .swatch { width: 18px; height: 4px; border-radius: 2px; }
+  #status { font-size: 12px; color: #6b7280; margin-top: 8px; min-height: 16px; }
+  .err { color: #b91c1c; }
+  #overlay { position: absolute; inset: 0; background: rgba(255,255,255,.6);
+             display: none; align-items: center; justify-content: center; z-index: 999; }
+  .spinner { width: 46px; height: 46px; border: 5px solid #c7d2fe; border-top-color: #1d4ed8;
+             border-radius: 50%; animation: spin .8s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .route-stat { font-size: 11px; color: #6b7280; margin-left: auto; }
+  #cmp { margin-top: 10px; font-size: 12px; color: #374151; }
+  #cmp b { color: #1d4ed8; }
+  .hint { font-size: 11px; color: #6b7280; line-height: 1.4; }
+  button.secondary { width: auto; margin: 0; padding: 7px 10px; background: #e5e7eb;
+                     color: #374151; font-size: 12px; }
+  #map.picking { cursor: crosshair; }
+</style>
+</head>
+<body>
+<div id="app">
+  <div id="panel">
+    <h1>🚚 Định tuyến động & gom hàng</h1>
+    <div class="sub">Hybrid ACO · mô hình phát thải PRP · E10 · bản đồ Hà Nội thật</div>
+
+    <div class="row">
+      <div><label>Số đơn</label><input type="number" id="customers" value="25" min="3" max="60"/></div>
+      <div><label>Số xe</label><input type="number" id="vehicles" value="5" min="1" max="10"/></div>
+    </div>
+    <div class="row">
+      <div><label>Tải/xe</label><input type="number" id="capacity" value="100" min="20"/></div>
+      <div><label>Seed</label><input type="number" id="seed" value="42"/></div>
+    </div>
+
+    <label>Nguồn điểm</label>
+    <select id="source">
+      <option value="random" selected>Ngẫu nhiên từ bản đồ</option>
+      <option value="manual">✋ Tự chọn trên bản đồ</option>
+    </select>
+    <div id="manualBox" style="display:none">
+      <div class="hint">Nhấp bản đồ để đặt điểm: <b>điểm đầu = Kho 🏭</b>, các điểm
+        sau = đơn giao. Cần ≥ 2 đơn.</div>
+      <div class="row" style="margin-top:8px">
+        <div><label>Khối lượng/đơn</label><input type="number" id="mdemand" value="10" min="1"/></div>
+        <div style="display:flex;align-items:flex-end">
+          <button id="clearpts" class="secondary">Xoá điểm</button></div>
+      </div>
+      <div id="ptcount" class="hint" style="margin-top:6px">Chưa đặt điểm nào.</div>
+    </div>
+
+    <label>Loại nhiên liệu</label>
+    <select id="fuel">
+      <option value="E10" selected>E10 (Hà Nội 2026)</option>
+      <option value="E5">E5 RON92</option>
+      <option value="E0">E0 — xăng khoáng RON95</option>
+    </select>
+
+    <label>Thuật toán (chế độ tĩnh)</label>
+    <select id="algo">
+      <option value="aco" selected>Hybrid ACO</option>
+      <option value="ortools">OR-Tools (tham chiếu)</option>
+      <option value="nn2opt">Nearest-Neighbor + 2-opt</option>
+    </select>
+
+    <label>Giờ khởi hành: <span class="range-val" id="hourval">8</span>h</label>
+    <input type="range" id="hour" min="5" max="20" step="0.5" value="8"/>
+
+    <div class="check"><input type="checkbox" id="congestion" checked/>
+      <label style="margin:0;font-weight:400">Bật tắc đường theo giờ cao điểm</label></div>
+
+    <label>Chế độ</label>
+    <select id="mode">
+      <option value="static" selected>Tĩnh — lộ trình tối ưu</option>
+      <option value="dynamic">Động — đơn phát sinh + tái tối ưu</option>
+    </select>
+    <div class="row" id="dynrow" style="display:none">
+      <div><label>Đơn phát sinh</label><input type="number" id="dynamic_orders" value="15" min="0" max="40"/></div>
+    </div>
+
+    <button id="go">Tối ưu lộ trình</button>
+    <div id="status"></div>
+
+    <div id="metrics">
+      <h2>Kết quả</h2>
+      <div class="m"><span>Đã giao</span><span id="r-served">–</span></div>
+      <div class="m"><span>Xe sử dụng</span><span id="r-veh">–</span></div>
+      <div class="m"><span>Quãng đường</span><span id="r-dist">–</span></div>
+      <div class="m"><span>Nhiên liệu</span><span id="r-fuel">–</span></div>
+      <div class="m"><span>Chi phí</span><span id="r-cost">–</span></div>
+      <div class="m"><span>CO₂</span><span id="r-co2">–</span></div>
+      <div class="m"><span>Tốc độ TB</span><span id="r-speed">–</span></div>
+      <div class="m" id="m-extra" style="display:none"><span id="ex-k">–</span><span id="ex-v">–</span></div>
+      <div id="legend"></div>
+    </div>
+  </div>
+  <div id="map"><div id="overlay"><div class="spinner"></div></div></div>
+</div>
+
+<script>
+const map = L.map('map').setView([21.0285, 105.8542], 14);
+L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
+  attribution: '© OpenStreetMap, © CARTO', maxZoom: 19,
+}).addTo(map);
+
+let layer = L.layerGroup().addTo(map);
+let placeLayer = L.layerGroup().addTo(map);
+const $ = id => document.getElementById(id);
+
+// ----- Đặt điểm thủ công -----
+let pickDepot = null;           // {lat, lon}
+let pickCustomers = [];         // [{lat, lon, demand}]
+
+function isManual() { return $('source').value === 'manual'; }
+
+function redrawPlaced() {
+  placeLayer.clearLayers();
+  if (pickDepot) {
+    L.marker([pickDepot.lat, pickDepot.lon], { icon: depotIcon() })
+      .bindPopup('Kho (bạn chọn)').addTo(placeLayer);
+  }
+  pickCustomers.forEach((c, i) => {
+    L.circleMarker([c.lat, c.lon], { radius: 7, color: '#b45309',
+      fillColor: '#f59e0b', fillOpacity: .95, weight: 2 })
+      .bindTooltip(String(i + 1), { permanent: true, direction: 'center',
+        className: 'ptlabel' }).addTo(placeLayer);
+  });
+  const n = pickCustomers.length;
+  $('ptcount').innerHTML = !pickDepot
+    ? 'Chưa đặt kho. Nhấp bản đồ để đặt <b>Kho</b>.'
+    : `Kho ✓ · <b>${n}</b> đơn` + (n < 2 ? ' (cần ≥ 2)' : '');
+}
+
+map.on('click', e => {
+  if (!isManual()) return;
+  const p = { lat: e.latlng.lat, lon: e.latlng.lng };
+  if (!pickDepot) pickDepot = p;
+  else pickCustomers.push({ ...p, demand: parseFloat($('mdemand').value) || 10 });
+  redrawPlaced();
+});
+
+$('source').addEventListener('change', () => {
+  const man = isManual();
+  $('manualBox').style.display = man ? 'block' : 'none';
+  $('map').classList.toggle('picking', man);
+  // Tự chọn chỉ hỗ trợ chế độ tĩnh.
+  $('mode').disabled = man;
+  if (man) { $('mode').value = 'static'; $('dynrow').style.display = 'none'; }
+  $('go').textContent = man ? 'Tính lộ trình từ điểm đã chọn' : 'Tối ưu lộ trình';
+});
+
+$('clearpts').addEventListener('click', () => {
+  pickDepot = null; pickCustomers = []; redrawPlaced();
+});
+
+$('hour').addEventListener('input', e => $('hourval').textContent = e.target.value);
+$('mode').addEventListener('change', e =>
+  $('dynrow').style.display = e.target.value === 'dynamic' ? 'flex' : 'none');
+
+function depotIcon() {
+  return L.divIcon({ className: '', iconSize: [26, 26], iconAnchor: [13, 13],
+    html: '<div style="font-size:24px;line-height:24px">🏭</div>' });
+}
+
+async function solve() {
+  if (isManual() && (!pickDepot || pickCustomers.length < 2)) {
+    $('status').className = 'err';
+    $('status').textContent = 'Hãy đặt 1 kho và ít nhất 2 đơn trên bản đồ.';
+    return;
+  }
+  const btn = $('go'); btn.disabled = true;
+  $('overlay').style.display = 'flex';
+  $('status').className = ''; $('status').textContent = 'Đang tính lộ trình…';
+  const common = {
+    vehicles: $('vehicles').value, capacity: $('capacity').value,
+    fuel: $('fuel').value, hour: $('hour').value,
+    congestion: $('congestion').checked ? '1' : '0', algo: $('algo').value,
+  };
+  let fetchOpts, url = '/api/solve';
+  if (isManual()) {
+    fetchOpts = { method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ...common, mode: 'static',
+        depot: pickDepot, customers: pickCustomers }) };
+  } else {
+    const p = new URLSearchParams({ ...common,
+      customers: $('customers').value, seed: $('seed').value,
+      mode: $('mode').value, dynamic_orders: $('dynamic_orders').value });
+    url = '/api/solve?' + p.toString();
+  }
+  try {
+    const t0 = performance.now();
+    const r = await fetch(url, fetchOpts);
+    const d = await r.json();
+    if (d.error) throw new Error(d.error);
+    if (isManual()) placeLayer.clearLayers();   // hiển thị kết quả đã định tuyến
+    render(d);
+    const dt = ((performance.now() - t0) / 1000).toFixed(1);
+    const algoName = { aco: 'Hybrid ACO', ortools: 'OR-Tools', nn2opt: 'NN+2-opt' }[d.algo] || d.algo;
+    $('status').textContent = `${algoName} · xong ${dt}s · ${d.fuel_name} · v* ${d.optimal_speed_kph} km/h`
+      + (d.used_real_map ? '' : ' · (lưới mô phỏng)');
+  } catch (e) {
+    $('status').className = 'err'; $('status').textContent = 'Lỗi: ' + e.message;
+  } finally { btn.disabled = false; $('overlay').style.display = 'none'; }
+}
+
+// Bật/tắt ô chọn thuật toán theo chế độ (động luôn dùng ACO).
+$('mode').addEventListener('change', e => {
+  $('algo').disabled = e.target.value === 'dynamic';
+});
+
+function render(d) {
+  layer.clearLayers();
+  const bounds = [];
+
+  // Lộ trình bám đường phố.
+  d.routes.forEach(rt => {
+    if (rt.polyline.length > 1) {
+      L.polyline(rt.polyline, { color: rt.color, weight: 4, opacity: 0.85 }).addTo(layer);
+      rt.polyline.forEach(pt => bounds.push(pt));
+    }
+  });
+
+  // Khách hàng.
+  d.customers.forEach(c => {
+    const dyn = c.dynamic;
+    L.circleMarker([c.lat, c.lon], {
+      radius: 5, color: dyn ? '#b45309' : '#374151',
+      fillColor: dyn ? '#f59e0b' : '#9ca3af', fillOpacity: 0.95, weight: 1.5,
+    }).bindPopup(`Đơn #${c.id}${dyn ? ' (phát sinh)' : ''}<br>Khối lượng: ${c.demand}`
+                 + `<br>Cửa sổ TG: ${c.tw[0]}h–${c.tw[1]}h`).addTo(layer);
+    bounds.push([c.lat, c.lon]);
+  });
+
+  // Kho.
+  L.marker([d.depot.lat, d.depot.lon], { icon: depotIcon() })
+    .bindPopup('Kho (depot)').addTo(layer);
+  bounds.push([d.depot.lat, d.depot.lon]);
+
+  if (bounds.length) map.fitBounds(bounds, { padding: [30, 30] });
+
+  // Chỉ số.
+  const m = d.metrics;
+  $('metrics').style.display = 'block';
+  $('r-served').textContent = `${m.served}${m.unserved ? ' (sót ' + m.unserved + ')' : ''}`;
+  $('r-veh').textContent = m.vehicles_used;
+  $('r-dist').textContent = m.distance_km + ' km';
+  $('r-fuel').textContent = m.liters + ' L';
+  $('r-cost').textContent = m.cost.toLocaleString('vi-VN') + ' đ';
+  $('r-co2').textContent = m.co2 + ' kg';
+  $('r-speed').textContent = m.avg_speed != null ? m.avg_speed + ' km/h' : '–';
+  if (m.num_replans != null) {
+    $('m-extra').style.display = 'flex';
+    $('ex-k').textContent = 'Số lần tái tối ưu';
+    $('ex-v').textContent = `${m.num_replans} (${m.avg_solve_ms} ms/lần)`;
+  } else { $('m-extra').style.display = 'none'; }
+
+  const leg = $('legend'); leg.innerHTML = '';
+  d.routes.forEach(rt => {
+    const el = document.createElement('div'); el.className = 'leg';
+    const stat = rt.liters != null ? `${rt.liters} L · ${rt.distance_km} km`
+                                    : `${rt.distance_km} km`;
+    el.innerHTML = `<span class="swatch" style="background:${rt.color}"></span>`
+      + `Xe ${rt.vehicle} · ${rt.num_stops} điểm`
+      + `<span class="route-stat">${stat}</span>`;
+    leg.appendChild(el);
+  });
+}
+
+$('go').addEventListener('click', solve);
+solve();  // chạy lần đầu
+</script>
+</body>
+</html>

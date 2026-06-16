@@ -1,0 +1,4 @@
+numpy>=1.24
+networkx>=3.0
+matplotlib>=3.6
+osmnx>=1.6   # tải bản đồ thật từ OpenStreetMap; nếu thiếu -> tự fallback sang lưới mô phỏng
