@@ -19,33 +19,6 @@ search) on top of a **Time-Dependent VRPTW**, with the objective being a
 - **Dynamic routing**: rolling-horizon, dynamic orders, pheromone warm-start.
 - **Benchmark**: compared against Nearest-Neighbor, NN+2-opt, and **Google OR-Tools**.
 
-## Structure
-```
-config.py                 # all parameters (problem, PRP, ACO, traffic, fuel)
-src/
-  graph_loader.py         # load real map (OSMnx) + matrices + street geometry
-  problem.py              # Order/Vehicle + instance generation (incl. dynamic orders)
-  emission_model.py       # speed-based PRP emission model + E10 + CO₂
-  travel.py               # rush-hour congestion factor
-  aco_solver.py           # Hybrid ACO (MMAS + 2-opt/Or-opt/relocate + warm-start)
-  baseline.py             # NN, NN+2-opt, OR-Tools
-  dynamic_sim.py          # rolling-horizon dynamic simulation
-  metrics.py              # metrics: distance, fuel, CO₂, speed, TW violations
-  visualize.py            # plot routes, convergence, speed–emission curve
-  benchmark.py            # Solomon loader + DistanceModel (distance objective)
-experiments/
-  run_static.py           # static ACO + baseline comparison
-  run_dynamic.py          # dynamic vs static (value of re-optimization)
-  run_fueltype.py         # E0/E5/E10 comparison
-  run_emission.py         # speed–emission curve + rush-hour impact
-  run_benchmark.py        # standard Solomon VRPTW benchmark (6 classes)
-  run_statistics.py       # multi-seed: mean ± CI95 + Wilcoxon signed-rank
-data/solomon/             # 6 real Solomon instances (C101/C201/R101/R201/RC101/RC201)
-webapp/
-  server.py               # http.server backend (no Flask required)
-  index.html              # Leaflet UI (real map, Google-Maps style)
-```
-
 ## Installation
 ```bash
 pip install -r requirements.txt      # numpy, networkx, matplotlib, osmnx
