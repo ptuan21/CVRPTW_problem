@@ -1,11 +1,3 @@
-"""Thí nghiệm 5 — BENCHMARK CHUẨN Solomon VRPTW.
-
-Chạy Hybrid ACO và các baseline trên bộ Solomon (6 lớp C1/C2/R1/R2/RC1/RC2),
-mục tiêu kinh điển = tổng quãng đường. So sánh chéo các thuật toán; với bản 100
-khách còn đối chiếu best-known (BKS, tham khảo).
-
-Chạy:  python -m experiments.run_benchmark [size]      (size = 25 | 50 | 100)
-"""
 import os
 import sys
 
